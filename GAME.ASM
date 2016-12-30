@@ -103,17 +103,6 @@ PROC drawSprite
 	ret
 ENDP drawSprite
 
-PROC drawText
-	USES edi, esi, eax
-	mov di, 158
-	mov al, 40h
-	mov [es:di], al
-	inc di
-	mov al, 79h
-	mov [es:di], al
-	ret
-ENDP drawText
-
 ; Procedure to handle user input
 PROC handleUserInput
 	USES eax
@@ -126,47 +115,86 @@ PROC handleUserInput
 
 	; process key code here (scancode in AH, ascii code in AL)
 	cmp ah, 01	; scancode for ESCAPE key
-	jne	@@n1
+	jne	@@RightKey
 	call exit
 	jmp @@no_key_pressed
 
-@@n1:
+@@RightKey:
 	cmp ah, 77	; arrow right
-	jne @@n2
+	jne @@LeftKey
+
+	; Check if snake is longer than 1
+	mov eax, [SNAKE_ARRAY_LEN]
+	cmp eax, 1
+	je @@noLeftCheck
+	; Check if snake is going left
+	mov eax, 0
+	sub eax, [TILE_SIZE]
+	cmp eax, [DIRECTION_X]
+	je @@no_key_pressed
+	@@noLeftCheck:
 	mov eax, 0
 	add eax, [TILE_SIZE]
 	mov [DIRECTION_X], eax
 	mov [DIRECTION_Y], 0
 	jmp @@no_key_pressed
 
-@@n2:
+@@LeftKey:
 	cmp ah, 75	; arrow left
-	jne @@n3
+	jne @@DownKey
+	; Check if snake is longer than 1
+	mov eax, [SNAKE_ARRAY_LEN]
+	cmp eax, 1
+	je @@noRightCheck
+	; Check if snake is going right
+	mov eax, [TILE_SIZE]
+	cmp eax, [DIRECTION_X]
+	je @@no_key_pressed
+	@@noRightCheck:
 	mov eax, 0
 	sub eax, [TILE_SIZE]
 	mov [DIRECTION_X], eax
 	mov [DIRECTION_Y], 0
 	jmp @@no_key_pressed
 
-@@n3:
+@@DownKey:
 	cmp ah, 80	; arrow down
-	jne @@n4
+	jne @@UpKey
+	; Check if snake is longer than 1
+	mov eax, [SNAKE_ARRAY_LEN]
+	cmp eax, 1
+	je @@noUpCheck
+	; Check if snake is going up
+	mov eax, 0
+	sub eax, [TILE_SIZE]
+	cmp eax, [DIRECTION_Y]
+	je @@no_key_pressed
+	@@noUpCheck:
 	mov [DIRECTION_X], 0
 	mov eax, 0
 	add eax, [TILE_SIZE]
 	mov [DIRECTION_Y], eax
 	jmp @@no_key_pressed
 
-@@n4:
+@@UpKey:
 	cmp ah, 72	; arrow up
-	jne @@n5
+	jne @@NoKey
+	; Check if snake is longer than 1
+	mov eax, [SNAKE_ARRAY_LEN]
+	cmp eax, 1
+	je @@noDownCheck
+	; Check if snake is going down
+	mov eax, [TILE_SIZE]
+	cmp eax, [DIRECTION_Y]
+	je @@no_key_pressed
+	@@noDownCheck:
 	mov [DIRECTION_X], 0
 	mov eax, 0
 	sub eax, [TILE_SIZE]
 	mov [DIRECTION_Y], eax
 	jmp @@no_key_pressed
 
-@@n5:
+@@NoKey:
 @@no_key_pressed:
 	ret
 ENDP handleUserInput
@@ -183,8 +211,9 @@ ENDP initGameState
 
 ; Procedure to update the game world status (like enemies, collisions, events, ...)
 PROC updateGameState
-	USES eax, ebx
+	USES eax, ebx, ecx, edx
 
+	; Check if snake hits apple
 	mov eax, [SNAKE_ARRAY_X]
 	mov ebx, [SNAKE_ARRAY_Y]
 	cmp eax, [APPLE_X]
@@ -195,6 +224,23 @@ PROC updateGameState
 	call addSegment
 	call spawnRandomApple
 	@@noAppleHit:
+	; Check if snake hits itself
+	mov eax, 1
+	@@loop:
+		cmp eax, [SNAKE_ARRAY_LEN]
+		je  @@loopEnd
+		mov ebx, [SNAKE_ARRAY_X + 4*eax]
+		mov ecx, [SNAKE_ARRAY_Y + 4*eax]
+		cmp ebx, [SNAKE_ARRAY_X]
+		jne @@notHit
+		cmp ecx, [SNAKE_ARRAY_Y]
+		jne @@notHit
+		mov [GAME_OVER], 1
+		@@notHit:
+		inc eax
+		jmp @@loop
+	@@loopEnd:
+
 
 	inc [gameLoopCounter]
 	ret
@@ -206,6 +252,134 @@ PROC drawAll
 
 	ret
 ENDP drawAll
+
+
+PROC drawScore
+	USES eax, ebx, ecx, edx
+	LOCAL @@x :dword, \
+				@@y :dword
+
+	mov eax, [SCORE]
+	mov edx, 0
+	mov ebx, 10
+	div ebx
+
+	mov ecx, 0
+
+	@@loop:
+
+		mov ebx, [TILE_SIZE]
+		imul ecx, ebx
+		mov ebx, [SCORE_X]
+		imul ebx, [TILE_SIZE]
+		sub ebx, ecx
+		mov [@@x], ebx
+		mov ebx, [SCORE_Y]
+		imul ebx, [TILE_SIZE]
+		mov [@@y], ebx
+
+
+		@@isZero:
+			cmp edx, 0
+			jne @@isOne
+			call drawSprite, offset _digitZero, [@@x], [@@y]
+			jmp @@noDigit
+		@@isOne:
+			cmp edx, 1
+			jne @@isTwo
+			call drawSprite, offset _digitOne, [@@x], [@@y]
+			jmp @@noDigit
+		@@isTwo:
+			cmp edx, 2
+			jne @@isThree
+			call drawSprite, offset _digitTwo, [@@x], [@@y]
+			jmp @@noDigit
+		@@isThree:
+			cmp edx, 3
+			jne @@isFour
+			call drawSprite, offset _digitThree, [@@x], [@@y]
+			jmp @@noDigit
+		@@isFour:
+			cmp edx, 4
+			jne @@isFive
+			call drawSprite, offset _digitFour, [@@x], [@@y]
+			jmp @@noDigit
+		@@isFive:
+			cmp edx, 5
+			jne @@isSix
+			call drawSprite, offset _digitFive, [@@x], [@@y]
+			jmp @@noDigit
+		@@isSix:
+			cmp edx, 6
+			jne @@isSeven
+			call drawSprite, offset _digitSix, [@@x], [@@y]
+			jmp @@noDigit
+		@@isSeven:
+			cmp edx, 7
+			jne @@isEight
+			call drawSprite, offset _digitSeven, [@@x], [@@y]
+			jmp @@noDigit
+		@@isEight:
+			cmp edx, 8
+			jne @@isNine
+			call drawSprite, offset _digitEight, [@@x], [@@y]
+			jmp @@noDigit
+		@@isNine:
+			cmp edx, 9
+			jne @@noDigit
+			call drawSprite, offset _digitNine, [@@x], [@@y]
+			jmp @@noDigit
+		@@noDigit:
+			inc ecx
+
+			cmp eax, 0
+			je @@endLoop
+
+			mov edx, 0
+			mov ebx, 10
+			div ebx
+			jmp @@loop
+		@@endLoop:
+
+	ret
+ENDP drawScore
+
+PROC addWall
+	ARG @@x	:dword, \
+			@@y	:dword
+	USES eax, ebx
+
+	mov eax, [WALLS_ARRAY_LEN]
+	mov ebx, [@@x]
+	imul ebx, [TILE_SIZE]
+	mov [WALLS_ARRAY_X + 4 * eax], ebx
+
+	mov ebx, [@@y]
+	imul ebx, [TILE_SIZE]
+	mov [WALLS_ARRAY_Y + 4 * eax], ebx
+
+	inc eax
+	mov [WALLS_ARRAY_LEN], eax
+
+	ret
+ENDP addWall
+
+PROC drawWalls
+	USES eax, ebx, ecx
+
+	mov eax, 0
+	@@loop:
+		cmp eax, [WALLS_ARRAY_LEN]
+		je  @@loopEnd
+		mov ebx, [WALLS_ARRAY_X + 4*eax]
+		mov ecx, [WALLS_ARRAY_Y + 4*eax]
+		call drawSprite, offset _wall, ebx, ecx
+		inc eax
+		jmp @@loop
+	@@loopEnd:
+
+		ret
+ENDP
 
 PROC spawnRandomApple
 	USES eax, ebx, ecx
@@ -261,14 +435,6 @@ PROC clearSnakeSegment
 	ret
 ENDP clearSnakeSegment
 
-PROC moveBlock
-	ARG amount:dword
-	USES eax, edx
-mov ah, 9
-mov edx, offset moveMsg
-int 21h
-	ret
-ENDP moveBlock
 
 PROC drawSnake
 	LOCAL @@counter	:dword
@@ -340,6 +506,10 @@ start:
 	call setupVideo
 	call initGameState
 
+	call addWall, 1, 1
+	call addWall, 1, 2
+	call addWall, 1, 3
+
 	; Main game (endless) loop
 	@@gameLoop:
 	call handleUserInput
@@ -347,7 +517,9 @@ start:
 
 	call drawAll
 	call drawApple
-	call drawText
+	call drawScore
+
+	call drawWalls
 
 	mov eax, [gameLoopCounter]
 	cmp eax, 10
@@ -358,7 +530,14 @@ start:
 	@@move_over:
 	call updateGameState
 
+	mov eax, [GAME_OVER]
+	cmp eax, 1
+	je @@gameOver
+
 	jmp @@gameLoop
+
+	@@gameOver:
+		call exit
 
 	; Code can never get here
 
@@ -383,13 +562,18 @@ DATASEG
 	APPLE_Y dd 0
 
 	SCORE dd 0
+	SCORE_X dd 38
+	SCORE_Y dd 0
+	GAME_OVER dd 0
 
-	videoBuffer db 64320 dup(?)
+	videoBuffer db 64000 dup(?)
 	SNAKE_ARRAY_X dd 320 * 200 dup (?)
 	SNAKE_ARRAY_Y dd 320 * 200 dup (?)
 	SNAKE_ARRAY_LEN dd 1
 
-	moveMsg		db 'moveBlock$'
+	WALLS_ARRAY_X dd 320 * 200 dup (?)
+	WALLS_ARRAY_Y dd 320 * 200 dup (?)
+	WALLS_ARRAY_LEN dd 0
 
 	_snakeSegment dw 8, 8
 	db 4, 4, 4, 4, 4, 4, 4, 4
@@ -411,6 +595,16 @@ DATASEG
   db 0, 0, 6, 6, 6, 0, 0, 0
   db 0, 0, 0, 6, 0, 0, 0, 0
 
+	_wall dw 8, 8
+	db 11, 11, 0, 0, 0, 0, 11, 11
+  db 11, 11, 0, 0, 0, 0, 11, 11
+  db 11, 11, 0, 0, 0, 0, 11, 11
+  db 0, 0, 11, 11, 11, 11, 0, 0
+  db 0, 0, 11, 11, 11, 11, 0, 0
+  db 11, 11, 0, 0, 0, 0, 11, 11
+  db 11, 11, 0, 0, 0, 0, 11, 11
+  db 11, 11, 0, 0, 0, 0, 11, 11
+
 	_black dw 8, 8
 	db 0, 0, 0, 0, 0, 0, 0, 0
   db 0, 0, 0, 0, 0, 0, 0, 0
@@ -420,6 +614,107 @@ DATASEG
   db 0, 0, 0, 0, 0, 0, 0, 0
   db 0, 0, 0, 0, 0, 0, 0, 0
   db 0, 0, 0, 0, 0, 0, 0, 0
+
+	_digitZero dw 8, 8
+	db 0, 0, 0, 0, 0, 0, 0, 0
+  db 0, 0, 15, 15, 15, 15, 0, 0
+  db 0, 0, 15, 0, 0, 15, 0, 0
+  db 0, 0, 15, 0, 0, 15, 0, 0
+  db 0, 0, 15, 0, 0, 15, 0, 0
+  db 0, 0, 15, 0, 0, 15, 0, 0
+  db 0, 0, 15, 0, 0, 15, 0, 0
+  db 0, 0, 15, 15, 15, 15, 0, 0
+
+	_digitOne dw 8, 8
+	db 0, 0, 0, 0, 0, 0, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+
+	_digitTwo dw 8, 8
+	db 0, 0, 0, 0, 0, 0, 0, 0
+  db 0, 0, 15, 15, 15, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+  db 0, 0, 15, 15, 15, 15, 0, 0
+  db 0, 0, 15, 0, 0, 0, 0, 0
+  db 0, 0, 15, 0, 0, 0, 0, 0
+  db 0, 0, 15, 15, 15, 15, 0, 0
+
+	_digitThree dw 8, 8
+	db 0, 0, 0, 0, 0, 0, 0, 0
+  db 0, 0, 15, 15, 15, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+  db 0, 0, 0, 15, 15, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+  db 0, 0, 15, 15, 15, 15, , 0
+
+	_digitFour dw 8, 8
+	db 0, 0, 0, 0, 0, 0, 0, 0
+  db 0, 0, 15, 0, 0, 15, 0, 0
+  db 0, 0, 15, 0, 0, 15, 0, 0
+  db 0, 0, 15, 0, 0, 15, 0, 0
+  db 0, 0, 15, 15, 15, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+
+	_digitFive dw 8, 8
+	db 0, 0, 0, 0, 0, 0, 0, 0
+  db 0, 0, 15, 15, 15, 15, 0, 0
+  db 0, 0, 15, 0, 0, 0, 0, 0
+  db 0, 0, 15, 0, 0, 0, 0, 0
+  db 0, 0, 15, 15, 15, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+  db 0, 0, 15, 15, 15, 15, 0, 0
+
+	_digitSix dw 8, 8
+	db 0, 0, 0, 0, 0, 0, 0, 0
+  db 0, 0, 15, 15, 15, 15, 0, 0
+  db 0, 0, 15, 0, 0, 0, 0, 0
+  db 0, 0, 15, 0, 0, 0, 0, 0
+  db 0, 0, 15, 15, 15, 15, 0, 0
+  db 0, 0, 15, 0, 0, 15, 0, 0
+  db 0, 0, 15, 0, 0, 15, 0, 0
+  db 0, 0, 15, 15, 15, 15, 0, 0
+
+	_digitSeven dw 8, 8
+	db 0, 0, 0, 0, 0, 0, 0, 0
+  db 0, 15, 15, 15, 15, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+  db 0, 0, 0, 0, 15, 0, 0, 0
+  db 0, 0, 0, 0, 15, 0, 0, 0
+  db 0, 0, 0, 15, 0, 0, 0, 0
+  db 0, 0, 0, 15, 0, 0, 0, 0
+  db 0, 0, 15, 0, 0, 0, 0, 0
+
+	_digitEight dw 8, 8
+	db 0, 0, 0, 0, 0, 0, 0, 0
+  db 0, 0, 15, 15, 15, 15, 0, 0
+  db 0, 0, 15, 0, 0, 15, 0, 0
+  db 0, 0, 15, 0, 0, 15, 0, 0
+  db 0, 0, 15, 15, 15, 15, 0, 0
+  db 0, 0, 15, 0, 0, 15, 0, 0
+  db 0, 0, 15, 0, 0, 15, 0, 0
+  db 0, 0, 15, 15, 15, 15, 0, 0
+
+	_digitNine dw 8, 8
+	db 0, 0, 0, 0, 0, 0, 0, 0
+  db 0, 0, 15, 15, 15, 15, 0, 0
+  db 0, 0, 15, 0, 0, 15, 0, 0
+  db 0, 0, 15, 0, 0, 15, 0, 0
+  db 0, 0, 15, 15, 15, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+  db 0, 0, 0, 0, 0, 15, 0, 0
+  db 0, 0, 15, 15, 15, 15, 0, 0
+
 
 
 ;=============================================================================
