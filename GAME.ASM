@@ -206,6 +206,7 @@ PROC initGameState
 	mov eax, [TILE_SIZE]
 	mov [SNAKE_ARRAY_Y], eax
 	call spawnRandomApple
+	call spawnWalls
 	ret
 ENDP initGameState
 
@@ -240,6 +241,23 @@ PROC updateGameState
 		inc eax
 		jmp @@loop
 	@@loopEnd:
+
+	; Check if snake hits wall
+	mov eax, 0
+	@@loopWall:
+		cmp eax, [WALLS_ARRAY_LEN]
+		je  @@loopWallEnd
+		mov ebx, [WALLS_ARRAY_X + 4*eax]
+		mov ecx, [WALLS_ARRAY_Y + 4*eax]
+		cmp ebx, [SNAKE_ARRAY_X]
+		jne @@noWallHit
+		cmp ecx, [SNAKE_ARRAY_Y]
+		jne @@noWallHit
+		mov [GAME_OVER], 1
+		@@noWallHit:
+		inc eax
+		jmp @@loopWall
+	@@loopWallEnd:
 
 
 	inc [gameLoopCounter]
@@ -344,6 +362,54 @@ PROC drawScore
 	ret
 ENDP drawScore
 
+PROC drawMenu
+	USES eax, ebx, ecx, edx
+
+	
+
+	ret
+ENDP drawMenu
+
+PROC spawnWalls
+	USES eax
+	LOCAL @@counter
+
+	mov eax, 4
+	@@loop:
+		cmp eax, 9
+		je @@next
+		call addWall, 4, eax
+		inc eax
+		jmp @@loop
+	@@next:
+		mov eax, 11
+	@@loop1:
+		cmp eax, 20
+		je @@next1
+		call addWall, 4, eax
+		inc eax
+		jmp @@loop1
+	@@next1:
+		mov eax, 10
+  @@loop2:
+		cmp eax, 15
+		je @@next2
+		call addWall, eax, 22
+		inc eax
+		jmp @@loop2
+	@@next2:
+		mov eax, 18
+	@@loop3:
+		cmp eax, 36
+		je @@next3
+		call addWall, eax, 22
+		add eax, 2
+		jmp @@loop3
+	@@next3:
+
+		ret
+ENDP spawnWalls
+
 PROC addWall
 	ARG @@x	:dword, \
 			@@y	:dword
@@ -401,8 +467,43 @@ PROC spawnRandomApple
 	mov ebx, [APPLE_Y]
 	cmp ebx, 0
 	jne @@end
-	call spawnRandomApple
+	call spawnRandomApple ; Check if apple is on Y 0
 	@@end:
+
+	; Check if apple is inside walls
+	mov eax, 0
+	@@loopWall:
+		cmp eax, [WALLS_ARRAY_LEN]
+		je  @@loopWallEnd
+		mov ebx, [WALLS_ARRAY_X + 4*eax]
+		mov ecx, [WALLS_ARRAY_Y + 4*eax]
+		cmp ebx, [APPLE_X]
+		jne @@noWallHit
+		cmp ecx, [APPLE_Y]
+		jne @@noWallHit
+		call spawnRandomApple
+		@@noWallHit:
+		inc eax
+		jmp @@loopWall
+	@@loopWallEnd:
+
+	; Check if apple is inside snake
+	mov eax, 1
+	@@loop:
+		cmp eax, [SNAKE_ARRAY_LEN]
+		je  @@loopEnd
+		mov ebx, [SNAKE_ARRAY_X + 4*eax]
+		mov ecx, [SNAKE_ARRAY_Y + 4*eax]
+		cmp ebx, [SNAKE_ARRAY_X]
+		jne @@notHit
+		cmp ecx, [SNAKE_ARRAY_Y]
+		jne @@notHit
+		call spawnRandomApple
+		@@notHit:
+		inc eax
+		jmp @@loop
+	@@loopEnd:
+
 	ret
 ENDP spawnRandomApple
 
@@ -506,14 +607,17 @@ start:
 	call setupVideo
 	call initGameState
 
-	call addWall, 1, 1
-	call addWall, 1, 2
-	call addWall, 1, 3
-
 	; Main game (endless) loop
 	@@gameLoop:
 	call handleUserInput
 
+	cmp [GAME_STARTED], 1
+	je @@noMenu
+
+	call drawMenu
+
+	jmp @@gameLoop
+	@@noMenu:
 
 	call drawAll
 	call drawApple
@@ -565,6 +669,7 @@ DATASEG
 	SCORE_X dd 38
 	SCORE_Y dd 0
 	GAME_OVER dd 0
+	GAME_STARTED dd 0
 
 	videoBuffer db 64000 dup(?)
 	SNAKE_ARRAY_X dd 320 * 200 dup (?)
@@ -715,6 +820,15 @@ DATASEG
   db 0, 0, 0, 0, 0, 15, 0, 0
   db 0, 0, 15, 15, 15, 15, 0, 0
 
+	_charA dw 8, 8
+	db 0, 0, 0, 0, 0, 0, 0, 0
+  db 0, 0, 0, 0, 0, 0, 0, 0
+  db 0, 0, 0, 0, 0, 0, 0, 0
+  db 0, 0, 0, 0, 0, 0, 0, 0
+  db 0, 0, 0, 0, 0, 0, 0, 0
+  db 0, 0, 0, 0, 0, 0, 0, 0
+  db 0, 0, 0, 0, 0, 0, 0, 0
+  db 0, 0, 0, 0, 0, 0, 0, 0
 
 
 ;=============================================================================
